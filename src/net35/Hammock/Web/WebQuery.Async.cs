@@ -315,9 +315,9 @@ namespace Hammock.Web
                     }
 #endif
                     WebResponse = response;
-                    
+
                     ContentStream = response.GetResponseStream();
-                    
+
                     if (store != null)
                     {
                         // No expiration specified
@@ -350,6 +350,10 @@ namespace Hammock.Web
             catch (WebException ex)
             {
                 HandleWebException(ex);
+            }
+            catch (Exception ex)
+            {
+                HandleException(ex);
             }
         }
 

@@ -822,6 +822,31 @@ namespace Hammock.Web
             }
         }
 
+        protected void HandleException(Exception exception)
+        {
+            WebException wexception = exception as WebException;
+            Stream stream = new MemoryStream();
+            if (wexception != null)
+            {
+                if (!(wexception.Response is HttpWebResponse))
+                {
+                    return;
+                }
+
+                WebResponse = wexception.Response;
+           
+                stream = WebResponse.GetResponseStream();
+
+                if (stream == null)
+                {
+                    return;
+                }
+            }
+
+            var args = new WebQueryResponseEventArgs(stream, exception);
+            OnQueryResponse(args);
+        }
+
         protected void HandleWebException(WebException exception)
         {
             if (!(exception.Response is HttpWebResponse))
