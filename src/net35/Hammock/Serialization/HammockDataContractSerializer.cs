@@ -32,7 +32,7 @@ namespace Hammock.Serialization
 
         #region IDeserializer Members
 
-        public virtual object Deserialize(RestResponse response, Type type)
+        public virtual object Deserialize(RestResponseBase response, Type type)
         {
             using (var stringReader = new StringReader(response.Content))
             {
@@ -46,7 +46,7 @@ namespace Hammock.Serialization
             }
         }
 
-        public virtual T Deserialize<T>(RestResponse<T> response)
+        public virtual T Deserialize<T>(RestResponseBase response)
         {
             using (var stringReader = new StringReader(response.Content))
             {
@@ -61,7 +61,7 @@ namespace Hammock.Serialization
         }
 
 #if NET40
-        public dynamic DeserializeDynamic(RestResponse<dynamic> response)
+        public dynamic DeserializeDynamic(RestResponseBase response)
         {
             throw new NotSupportedException();
         }

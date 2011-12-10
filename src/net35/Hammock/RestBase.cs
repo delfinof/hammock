@@ -64,6 +64,7 @@ namespace Hammock
         protected virtual internal WebParameterCollection Parameters { get; set; }
         protected virtual internal WebParameterCollection Cookies { get; set; }
         protected virtual internal ICollection<HttpPostParameter> PostParameters { get; set; }
+        protected internal virtual bool TraceEnabled { get; set; }
         
         protected virtual internal byte[] PostContent
         {
@@ -81,6 +82,7 @@ namespace Hammock
             }
         }
 
+        public virtual Func<RestRequest, RestResponseBase, Type> GetErrorResponseEntityType { get; set; }
         public virtual string UserAgent { get; set; }
         public virtual WebMethod? Method { get; set; }
         public virtual IWebCredentials Credentials { get; set; }
@@ -164,6 +166,7 @@ namespace Hammock
         public virtual IWebQueryInfo Info { get; set; }
         public virtual string Path { get; set; }
         public virtual object Tag { get; set; }
+        public virtual CookieContainer CookieContainer { get; set; }
 
         public virtual void AddHeader(string name, string value)
         {
@@ -175,11 +178,13 @@ namespace Hammock
             Parameters.Add(name, value);
         }
 
+        [Obsolete("Use CookieContainer instead.")]
         public virtual void AddCookie(string name, string value)
         {
             Cookies.Add(new HttpCookieParameter(name, value));
         }
 
+        [Obsolete("Use CookieContainer instead.")]
         public virtual void AddCookie(Uri domain, string name, string value)
         {
             Cookies.Add(new HttpCookieParameter(name, value) { Domain = domain });

@@ -53,6 +53,25 @@ namespace Hammock.Tests
         }
 
         [Test]
+        public void Can_request_get_with_header_on_client()
+        {
+            var client = new RestClient
+            {
+                Authority = "https://api.twitter.com",
+                UserAgent = "Hammock",
+                Path = "statuses/public_timeline.json",
+                DecompressionMethods = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            };
+
+            client.AddHeader("Accept", "application/json");
+            
+            var response = client.Request();
+
+            Assert.IsNotNull(response);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Test]
         public void Can_get_oauth_request_token()
         {
             var client = new RestClient

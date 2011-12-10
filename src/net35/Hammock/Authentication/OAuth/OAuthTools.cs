@@ -5,6 +5,10 @@ using System.Text;
 using Hammock.Extensions;
 using Hammock.Web;
 
+#if NETCF
+using Hammock.Security.Cryptography;
+#endif
+
 namespace Hammock.Authentication.OAuth
 {
 #if !SILVERLIGHT

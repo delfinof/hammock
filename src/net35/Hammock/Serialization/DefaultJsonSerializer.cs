@@ -7,20 +7,20 @@ namespace Hammock.Serialization
 {
     public class DefaultJsonSerializer : IDeserializer
     {
-        public object Deserialize(RestResponse response, Type type)
+        public object Deserialize(RestResponseBase response, Type type)
         {
             var result = JsonParser.Deserialize(response.Content, type);
             return result;
         }
 
-        public T Deserialize<T>(RestResponse<T> response)
+        public T Deserialize<T>(RestResponseBase response)
         {
             var result = JsonParser.Deserialize<T>(response.Content);
             return result;
         }
 
 #if NET40
-        public dynamic DeserializeDynamic(RestResponse<dynamic> response)
+        public dynamic DeserializeDynamic(RestResponseBase response)
         {
             var result = JsonParser.Deserialize(response.Content);
             return result;

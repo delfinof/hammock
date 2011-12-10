@@ -54,7 +54,7 @@ namespace Hammock.Serialization
                     }
                 }
 
-#if !Smartphone
+#if !Smartphone && !NETCF
                 result = ContentEncoding.GetString(stream.ToArray());
 #else
                 result = ContentEncoding.GetString(stream.ToArray(), 0, (int)stream.Length);
@@ -72,7 +72,7 @@ namespace Hammock.Serialization
 
         #region IDeserializer Methods
 
-        public virtual object Deserialize(RestResponse response, Type type)
+        public virtual object Deserialize(RestResponseBase response, Type type)
         {
             object instance;
             var serializer = CacheOrGetSerializerFor(type);
@@ -83,7 +83,7 @@ namespace Hammock.Serialization
             return instance;
         }
 
-        public virtual T Deserialize<T>(RestResponse<T> response)
+        public virtual T Deserialize<T>(RestResponseBase response)
         {
             T instance;
             var serializer = CacheOrGetSerializerFor(typeof(T));
@@ -95,9 +95,9 @@ namespace Hammock.Serialization
         }
 
 #if NET40
-        public virtual dynamic DeserializeDynamic(RestResponse<dynamic> response)
+        public virtual dynamic DeserializeDynamic(RestResponseBase response)
         {
-            var result = Deserialize(response);
+            var result = Deserialize<dynamic>(response);
             return result;
         }
 #endif

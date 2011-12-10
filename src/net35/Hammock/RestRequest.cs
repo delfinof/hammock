@@ -42,20 +42,14 @@ namespace Hammock
             }
             set
             {
-                if (_entity != null && _entity.Equals(value))
+                if (Equals(_entity, value))
                 {
                     return;
                 }
 
                 _entity = value;
                 OnPropertyChanged("Entity");
-
-                // [DC] Automatically posts an entity unless put is declared
-                RequestEntityType = _entity.GetType();
-                if (_entity != null && (Method != WebMethod.Post && Method != WebMethod.Put))
-                {
-                    Method = WebMethod.Post;
-                }
+                RequestEntityType = _entity == null ? null : _entity.GetType();
             }
         }
 

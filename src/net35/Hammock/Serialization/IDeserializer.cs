@@ -7,10 +7,10 @@ namespace Hammock.Serialization
 {
     public interface IDeserializer
     {
-        object Deserialize(RestResponse response, Type type);
-        T Deserialize<T>(RestResponse<T> response);
+        object Deserialize(RestResponseBase response, Type type);
+        T Deserialize<T>(RestResponseBase response);
 #if NET40
-        dynamic DeserializeDynamic(RestResponse<dynamic> response);
+        dynamic DeserializeDynamic(RestResponseBase response);
 #endif
     }
 }

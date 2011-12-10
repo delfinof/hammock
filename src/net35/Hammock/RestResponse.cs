@@ -55,6 +55,7 @@ namespace Hammock
             }
         }
 
+        public virtual object ErrorContentEntity { get; set; }
         public virtual Stream ContentStream { get; set; }
         public virtual WebResponse InnerResponse { get; set; }
         public virtual Exception InnerException { get; set; }
@@ -73,7 +74,9 @@ namespace Hammock
         public virtual int TimesTried { get; set; }
         public virtual object Tag { get; set; }
         public virtual NameValueCollection Headers { get; set; }
+        [Obsolete("Use CookieContainer instead.")]
         public virtual NameValueCollection Cookies { get; set; }
+        public virtual CookieContainer CookieContainer { get; set; }
         public virtual bool SkippedDueToRateLimitingRule { get; set; }
         public virtual bool IsFromCache
         {
@@ -93,7 +96,9 @@ namespace Hammock
         private void Initialize()
         {
             Headers = new NameValueCollection(0);
+#pragma warning disable 618
             Cookies = new NameValueCollection(0);
+#pragma warning restore 618
         }
 
         // http://www.yoda.arachsys.com/csharp/readbinary.html

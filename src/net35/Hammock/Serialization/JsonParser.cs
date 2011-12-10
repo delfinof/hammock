@@ -27,6 +27,10 @@ using System.Text;
 #if NET40
 using System.Dynamic;
 #endif
+#if NETCF
+using Hammock.Extensions;
+#endif
+
 
 namespace Hammock.Serialization
 {
@@ -261,7 +265,11 @@ namespace Hammock.Serialization
                 if (info.PropertyType == typeof(byte[]))
                 {
                     var bytes = (List<object>)value;
+#if NETCF
+                    value = bytes.Select(o => Convert.ToByte(o)).ToArray();
+#else
                     value = bytes.Select(Convert.ToByte).ToArray();
+#endif
                 }
 
                 if (info.PropertyType == typeof(double))
@@ -432,7 +440,7 @@ namespace Hammock.Serialization
 #if NETCF
             if (input.TryParse(out number))
             {
-                sb.Append(number);
+              sb.Append(number);
             }
 #else
             if (double.TryParse(input, JsonNumbers, CultureInfo.InvariantCulture, out number))
@@ -512,7 +520,11 @@ namespace Hammock.Serialization
         {
             sb.Append("\"");
             var symbols = item.ToString().ToCharArray();
+#if NETCF
+            foreach (var unicode in symbols.Select(symbol => (int)symbol).Select(code => GetUnicode(code)))
+#else
             foreach (var unicode in symbols.Select(symbol => (int)symbol).Select(GetUnicode))
+#endif
             {
                 sb.Append(unicode);
             }

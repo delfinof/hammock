@@ -69,17 +69,6 @@ namespace Hammock
         public virtual string SilverlightAcceptEncodingHeader { get; set;}
         
         /// <summary>
-        /// Used to set the name of the "Authorization" header used by your Silverlight proxy.
-        /// </summary>
-        public virtual string SilverlightAuthorizationHeader { get; set;}
-
-        /// <summary>
-        /// Used to set the name of the "Method" header used by your Silverlight proxy.
-        /// This passes the correct HTTP method to the header as all proxy calls use POST.
-        /// </summary>
-        public virtual string SilverlightMethodHeader { get; set; }
-
-        /// <summary>
         /// Used to set the name of the "User-Agent" header used by your Silverlight proxy.
         /// </summary>
         public virtual string SilverlightUserAgentHeader { get; set;}
@@ -143,6 +132,7 @@ namespace Hammock
         {
             Uri uri;
             WebQuery query = null;
+            request = request ?? new RestRequest();
 
             var retryPolicy = GetRetryPolicy(request);
             if (_firstTry)
@@ -155,7 +145,7 @@ namespace Hammock
             {
                 request = PrepareRequest(request, out uri, out query);
 
-                var url = uri.ToString();
+                var url = uri.AbsoluteUri;
 
                 if (RequestExpectsMock(request))
                 {
@@ -341,7 +331,7 @@ namespace Hammock
                 }
 
                 // Call the function to find the retry evaluator
-#if !Smartphone
+#if !Smartphone && !NETCF
                 var t = func.DynamicInvoke(null);
 #else
                 var del = func.GetInvocationList().FirstOrDefault();
@@ -522,6 +512,12 @@ namespace Hammock
             return info;
         }
 
+        private bool GetTraceEnabled(RestBase request)
+        {
+            var info = request.TraceEnabled || TraceEnabled;
+            return info;
+        }
+
         private TimeSpan? GetTimeout(RestBase request)
         {
             return request.Timeout ?? Timeout;
@@ -532,15 +528,20 @@ namespace Hammock
             return request.DecompressionMethods ?? DecompressionMethods;
         }
 
-        private WebMethod GetWebMethod(RestBase request)
+        private WebMethod GetWebMethod(RestRequest request)
         {
-            var method = !request.Method.HasValue
-                             ? !Method.HasValue
-                                   ? WebMethod.Get
-                                   : Method.Value
-                             : request.Method.Value;
-
-            return method;
+            if (request.Method.HasValue)
+            {
+                // Request settings take precedence over all.
+                return request.Method.Value;
+            }
+            if (Method.HasValue)
+            {
+                // The request does not specify the method - take the default specified on the client.
+                // Except, when the default is other than Post or Put and the request has an entity, in which case return the Post method.
+                return (request.Entity == null || Method.Value == WebMethod.Put || Method.Value == WebMethod.Post) ? Method.Value : WebMethod.Post;
+            }
+            return request.Entity == null ? WebMethod.Get : WebMethod.Post;
         }
 
         private byte[] GetPostContent(RestBase request)
@@ -674,7 +675,7 @@ namespace Hammock
 
         public virtual void BeginRequest<T>(RestRequest request, RestCallback<T> callback, object userState)
         {
-            BeginRequestImpl(request, callback, null, null, false /* isInternal */, null);
+            BeginRequestImpl(request, callback, null, null, false /* isInternal */, userState);
         }
 
         public virtual void BeginRequest()
@@ -731,10 +732,10 @@ namespace Hammock
 #if !WindowsPhone
         public virtual RestResponse EndRequest(IAsyncResult result)
         {
-#if !Mono
+#if !Mono && !NETCF
             var webResult = EndRequestImpl(result);
 #else
-			var webResult = EndRequestImpl(result, null);
+          var webResult = EndRequestImpl(result, null);
 #endif
             return webResult.AsyncState as RestResponse;
         }
@@ -747,10 +748,10 @@ namespace Hammock
 
         public virtual RestResponse<T> EndRequest<T>(IAsyncResult result)
         {
-#if !Mono
+#if !Mono && !NETCF
             var webResult = EndRequestImpl<T>(result);
 #else
-			var webResult = EndRequestImpl<T>(result, null);
+          var webResult = EndRequestImpl<T>(result, null);
 #endif
             return webResult.AsyncState as RestResponse<T>;
         }
@@ -773,7 +774,7 @@ namespace Hammock
             return webResult.AsyncState as RestResponse<T>;
         }
 
-#if !Mono
+#if !Mono && !NETCF
         private WebQueryAsyncResult EndRequestImpl(IAsyncResult result, TimeSpan? timeout = null)
 		{
 #else
@@ -813,7 +814,12 @@ namespace Hammock
             {
                 if(timeout.HasValue)
                 {
+#if NETCF
+                  var millisecondsTimeout = Convert.ToInt32(timeout.Value.TotalMilliseconds);
+                  webResult.AsyncWaitHandle.WaitOne(millisecondsTimeout, false);
+#else
                     webResult.AsyncWaitHandle.WaitOne(timeout.Value);
+#endif
                 }
                 else
                 {
@@ -821,12 +827,12 @@ namespace Hammock
                 }
             }
             return webResult;
-        }
+    }
 
-#if !Mono
+#if !Mono && !NETCF
         private WebQueryAsyncResult EndRequestImpl<T>(IAsyncResult result, TimeSpan? timeout = null)
 #else
-		private WebQueryAsyncResult EndRequestImpl<T>(IAsyncResult result, TimeSpan? timeout)
+    private WebQueryAsyncResult EndRequestImpl<T>(IAsyncResult result, TimeSpan? timeout)
 #endif
         {
             var webResult = result as WebQueryAsyncResult;
@@ -862,7 +868,12 @@ namespace Hammock
             {
                 if(timeout.HasValue)
                 {
+#if NETCF
+                  var millisecondsTimeout = Convert.ToInt32(timeout.Value.TotalMilliseconds);
+                  webResult.AsyncWaitHandle.WaitOne(millisecondsTimeout, false);
+#else
                     webResult.AsyncWaitHandle.WaitOne(timeout.Value);
+#endif
                 }
                 else
                 {
@@ -1052,21 +1063,21 @@ namespace Hammock
             return parentResult;
         }
 
-        private static void TraceResponseWithMock(RestResponseBase restResponse)
+        private void TraceResponseWithMock(RestResponseBase restResponse)
         {
 #if TRACE
-            Trace.WriteLine(String.Concat(
-                "RESPONSE: ", restResponse.StatusCode, " ", restResponse.StatusDescription)
-                );
+            if(!TraceEnabled)
+            {
+                return;
+            }
+
+            Trace.WriteLine(string.Concat("RESPONSE: ", restResponse.StatusCode, " ", restResponse.StatusDescription));
             Trace.WriteLineIf(restResponse.Headers.AllKeys.Count() > 0, "HEADERS:");
-            foreach (var trace in restResponse.Headers.AllKeys.Select(
-                key => String.Concat("\t", key, ": ", restResponse.Headers[key])))
+            foreach (var trace in restResponse.Headers.AllKeys.Select(key => string.Concat("\t", key, ": ", restResponse.Headers[key])))
             {
                 Trace.WriteLine(trace);
             }
-            Trace.WriteLine(String.Concat(
-                "\r\n", restResponse.Content)
-                );
+            Trace.WriteLine(string.Concat("\r\n", restResponse.Content));
 #endif
         }
 
@@ -1813,7 +1824,7 @@ namespace Hammock
                 return;
             }
 
-            var wasStreaming = response.Content.Equals("END STREAMING");
+            var wasStreaming = (response.Content != null && response.Content.Equals("END STREAMING"));
 
             if (callback != null && !wasStreaming)
             {
@@ -1830,7 +1841,7 @@ namespace Hammock
                 return;
             }
 
-            var wasStreaming = response.Content.Equals("END STREAMING");
+            var wasStreaming = (response.Content != null && response.Content.Equals("END STREAMING"));
 
             if (callback != null && !wasStreaming)
             {
@@ -2430,18 +2441,20 @@ namespace Hammock
             var result = query.Result;
             var response = BuildBaseResponse(result);
 
+            response.CookieContainer = request.CookieContainer;
             DeserializeEntityBody(request, response);
             response.Tag = GetTag(request);
 
             return response;
         }
 
-        private RestResponse<T> BuildResponseFromResult<T>(RestBase request, WebQuery query)
+        private RestResponse<T> BuildResponseFromResult<T>(RestRequest request, WebQuery query)
         {
             request = request ?? new RestRequest();
             var result = query.Result;
             var response = BuildBaseResponse<T>(result);
 
+            response.CookieContainer = request.CookieContainer;
             DeserializeEntityBody(request, response);
             response.Tag = GetTag(request);
 
@@ -2449,7 +2462,7 @@ namespace Hammock
         }
 
 #if NET40
-        private RestResponse<dynamic> BuildResponseFromResultDynamic(RestBase request, WebQuery query)
+        private RestResponse<dynamic> BuildResponseFromResultDynamic(RestRequest request, WebQuery query)
         {
             request = request ?? new RestRequest();
             var result = query.Result;
@@ -2496,9 +2509,11 @@ namespace Hammock
                     }
 #endif
 
-#if !SILVERLIGHT
+#if !SILVERLIGHT && !NETCF
                     if(result.WebResponse is HttpWebResponse)
                     {
+
+#pragma warning disable 618
                         var cookies = (result.WebResponse as HttpWebResponse).Cookies;
                         if(cookies != null)
                         {
@@ -2507,6 +2522,8 @@ namespace Hammock
                                 response.Cookies.Add(cookie.Name, cookie.Value);
                             }
                         }
+#pragma warning restore 618
+
                     }
 #endif
 
@@ -2531,35 +2548,53 @@ namespace Hammock
             return response;
         }
 
-        private void DeserializeEntityBody(RestRequest request, RestResponse response)
+        private bool ShouldDeserializeEntityBody(RestRequest request, RestResponseBase response, out IDeserializer deserializer)
         {
-            var deserializer = request.Deserializer ?? Deserializer;
-            if (deserializer == null || request.ResponseEntityType == null || response.ContentStream == null)
+            deserializer = request.Deserializer ?? Deserializer;
+            if (deserializer == null || response.ContentStream == null || string.IsNullOrEmpty(response.ContentType))
             {
-                return;
+                return false;
             }
-            response.ContentEntity = deserializer.Deserialize(response, request.ResponseEntityType);
+            if (response.InnerException != null)
+            {
+                Type errorResponseEntityType;
+                var getErrorResponseEntityType = request.GetErrorResponseEntityType ?? GetErrorResponseEntityType;
+                if (getErrorResponseEntityType != null && (errorResponseEntityType = getErrorResponseEntityType(request, response)) != null)
+                {
+                    response.ErrorContentEntity = deserializer.Deserialize(response, errorResponseEntityType);
+                }
+                return false;
+            }
+
+            return true;
         }
 
-        private void DeserializeEntityBody<T>(RestBase request, RestResponse<T> response)
+        private void DeserializeEntityBody(RestRequest request, RestResponse response)
         {
-            var deserializer = request.Deserializer ?? Deserializer;
-            if (deserializer == null || response.ContentStream == null)
+            IDeserializer deserializer;
+            if (ShouldDeserializeEntityBody(request, response, out deserializer) && request.ResponseEntityType != null)
             {
-                return;
+                response.ContentEntity = deserializer.Deserialize(response, request.ResponseEntityType);
             }
-            response.ContentEntity = deserializer.Deserialize(response);
+        }
+
+        private void DeserializeEntityBody<T>(RestRequest request, RestResponse<T> response)
+        {
+            IDeserializer deserializer;
+            if (ShouldDeserializeEntityBody(request, response, out deserializer))
+            {
+                response.ContentEntity = deserializer.Deserialize<T>(response);
+            }
         }
 
 #if NET40
-        private void DeserializeEntityBodyDynamic(RestBase request, RestResponse<dynamic> response)
+        private void DeserializeEntityBodyDynamic(RestRequest request, RestResponse<dynamic> response)
         {
-            var deserializer = request.Deserializer ?? Deserializer ?? new DefaultJsonSerializer() ;
-            if (response.ContentStream == null)
+            IDeserializer deserializer;
+            if (ShouldDeserializeEntityBody(request, response, out deserializer))
             {
-                return;
+                response.ContentEntity = deserializer.DeserializeDynamic(response);
             }
-            response.ContentEntity = deserializer.DeserializeDynamic(response);
         }
 #endif
 
@@ -2567,10 +2602,15 @@ namespace Hammock
         {
             // Fill query collections with found value pairs
             CoalesceWebPairsIntoCollection(query.Parameters, Parameters, request.Parameters);
+#pragma warning disable 618
             CoalesceWebPairsIntoCollection(query.Cookies, Cookies, request.Cookies);
-            
-            query.Headers.AddRange(Headers);
-            query.Headers.AddRange(request.Headers);
+#pragma warning restore 618
+
+            // If CookieContainer is set on request object then use that, else use the CookieContainer set on the Client.
+            if (request.CookieContainer == null)
+                request.CookieContainer = this.CookieContainer; 
+
+            query.CookieContainer = request.CookieContainer;
 
             // [DC]: These properties are trumped by request over client
             query.UserAgent = GetUserAgent(request);
@@ -2584,7 +2624,12 @@ namespace Hammock
 #if !SILVERLIGHT
             query.FollowRedirects = GetFollowRedirects(request);
 #endif
-            SerializeEntityBody(query, request);
+            query.Entity = SerializeEntityBody(request);
+
+            // [MK]: Serializer may modify the request headers, because they are part of the HTTP payload. Hence, move
+            // the header population after the entity body is serialized.
+            query.Headers.AddRange(Headers);
+            query.Headers.AddRange(request.Headers);
         }
 
         // [DC]: Trump duplicates by request over client over info values
@@ -2592,32 +2637,35 @@ namespace Hammock
         {
             var parameters = new WebPairCollection(values.SelectMany(value => value));
 
+            // [NvE] second facet not added due to if(target[pair.Name] == null); get names upfront
+            string[] exists = target.Names.ToArray();
+
             foreach (var pair in parameters)
             {
-                if(target[pair.Name] == null)
+                if (!exists.Contains(pair.Name))
                 {
                     target.Add(pair);
                 }
             }
         }
 
-        private void SerializeEntityBody(WebQuery query, RestRequest request)
+        private WebEntity SerializeEntityBody(RestRequest request)
         {
             var serializer = GetSerializer(request);
             if (serializer == null)
             {
                 // No suitable serializer for entity
-                return;
+                return null;
             }
 
             if (request.Entity == null || request.RequestEntityType == null)
             {
                 // Not enough information to serialize
-                return;
+                return null;
             }
 
             var entityBody = serializer.Serialize(request.Entity, request.RequestEntityType);
-            query.Entity = !entityBody.IsNullOrBlank()
+            return !entityBody.IsNullOrBlank()
                                ? new WebEntity
                                      {
                                          Content = entityBody,
@@ -2647,25 +2695,24 @@ namespace Hammock
             return entity;
         }
 
-        public WebQuery GetQueryFor(RestBase request, Uri uri)
+        public WebQuery GetQueryFor(RestRequest request, Uri uri)
         {
             var method = GetWebMethod(request);
             var credentials = GetWebCredentials(request);
             var info = GetInfo(request);
+            var traceEnabled = GetTraceEnabled(request);
 
             // [DC]: UserAgent is set via Info
             // [DC]: Request credentials trump client credentials
             var query = credentials != null
-                            ? credentials.GetQueryFor(uri.ToString(), request, info, method)
-                            : new BasicAuthWebQuery(info);
+                            ? credentials.GetQueryFor(uri.ToString(), request, info, method, traceEnabled)
+                            : new BasicAuthWebQuery(info, traceEnabled);
 
             query.PostProgress += QueryPostProgress;
 
 #if SILVERLIGHT
             query.HasElevatedPermissions = HasElevatedPermissions;
             query.SilverlightAcceptEncodingHeader = SilverlightAcceptEncodingHeader;
-            query.SilverlightAuthorizationHeader = SilverlightAuthorizationHeader;
-            query.SilverlightMethodHeader = SilverlightMethodHeader;
             query.SilverlightUserAgentHeader = SilverlightUserAgentHeader;
 #endif
             return query;
