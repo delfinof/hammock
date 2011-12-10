@@ -702,7 +702,7 @@ namespace Hammock.Web
 
             var parameters = Parameters.Where(
                 parameter => !(parameter is HttpPostParameter) || Method == WebMethod.Post).Where(
-                parameter => !string.IsNullOrEmpty(parameter.Name) && !string.IsNullOrEmpty(parameter.Value)
+                parameter => !string.IsNullOrEmpty(parameter.Name) && parameter.Value!=null // && !string.IsNullOrEmpty(parameter.Value)
                 );
 
             foreach (var parameter in parameters)
